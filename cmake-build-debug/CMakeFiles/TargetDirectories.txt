@@ -1,0 +1,3 @@
+C:/Users/serxu/OneDrive/Escritorio/Parking/Parking/cmake-build-debug/CMakeFiles/Parking.dir
+C:/Users/serxu/OneDrive/Escritorio/Parking/Parking/cmake-build-debug/CMakeFiles/edit_cache.dir
+C:/Users/serxu/OneDrive/Escritorio/Parking/Parking/cmake-build-debug/CMakeFiles/rebuild_cache.dir
