@@ -3,8 +3,6 @@
 #include <pthread.h>
 #include <unistd.h>
 
-#define COCHES 10
-#define CAMIONES 1
 
 //La variable parking simulara las plazas del parking a ellas se accede de la siguiente forma:
 //planta 2 aparcamiento 4 seria parking[2-1][4-1];
@@ -18,13 +16,32 @@ int pisos;
 //Guardara el primer par de sitios libre y las plazas libres que hay
 int plazaslibres, plazascamiones;
 
+//Guardara las plazas libres que hay
+int plazaslibres;
+
+//Cantidad de coches
+int cantcoches;
+
+//Cantidad de camiones
+int cantcamiones;
 
 
 //Mutex para dispositivo de control
 pthread_mutex_t mutex;
 
 //COndicion del mutex
-pthread_cond_t espera[COCHES+1];
+pthread_cond_t *esperacoches;
+pthread_cond_t *esperacamiones;
+
+void mostrarParking(){
+    int i,j;
+    for(i=0;i<pisos;i++){
+        for(j=0;j<plazas;j++){
+            printf("[%i] ",parking[i][j]);
+        }
+        printf("\n");
+    }
+}
 
 void *coche(void *num){
     //valor booleano util para la busqueda del aprcamiento
@@ -44,7 +61,7 @@ void *coche(void *num){
 
 
     while(plazaslibres==0){
-        pthread_cond_wait(&espera[coche_id], &mutex);
+        pthread_cond_wait(&esperacoches[coche_id], &mutex);
     }
 
     //Entra en seccion critica
@@ -71,6 +88,7 @@ void *coche(void *num){
                 plazacamionplanta[i]=placamion;
                 salida=0;
                 printf("ENTRADA: Coche %i aparcado en plaza %i del piso %i. Plazas libres: %i. Plazas camion: %i\n",coche_id,aparcamiento[1],aparcamiento[0],plazaslibres, plazascamiones);
+                mostrarParking();
             }
         }
     }
@@ -94,13 +112,11 @@ void *coche(void *num){
     plazascamiones+=(placamion-plazacamionplanta[aparcamiento[0]]);
     plazacamionplanta[aparcamiento[0]]=placamion;
     printf("SALIDA: Coche %i saliendo. Plazas libres: %i. Plazas camión: %i\n",coche_id,plazaslibres,plazascamiones);
-    if(plazascamiones>0){
-        for(int i=COCHES+1;i<=COCHES+CAMIONES;i++){
-            pthread_cond_signal(&espera[i]);
-        }
+    for(int i=1;i<=cantcoches;i++){
+        pthread_cond_signal(&esperacoches[i]);
     }
-    for(int i=1;i<=COCHES;i++){
-        pthread_cond_signal(&espera[i]);
+    for(int i=1; i<=cantcamiones; i++){
+        pthread_cond_signal(&esperacamiones[i]);
     }
 
     //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
@@ -116,7 +132,7 @@ void *camion(void *num){
 
     //valor para que el camión sepa donde aparca
     int aparcamiento[3];
-    int coche_id= *(int *)num;
+    int camion_id= *(int *)num;
 
     //LOCK DEL MUTEX
     pthread_mutex_lock(&mutex);
@@ -124,29 +140,29 @@ void *camion(void *num){
 
 
     while(plazascamiones==0){
-        pthread_cond_wait(&espera[coche_id], &mutex);
+        pthread_cond_wait(&esperacamiones[camion_id], &mutex);
     }
 
     //Entra en seccion critica
     //printf("coche %i en la seccion critica\n",coche_id);
 
 
-    plazaslibres=plazaslibres-2;
+    plazaslibres-=2;
     plazascamiones--;
-    printf("Estoy aquí\n");
     //Busca sitio para aparcar
     for(int i=0;i<pisos && salida;i++){
         for(int j=0;j<plazas-1 && salida;j++){
             //Sabemos que hay un sitio diferente al que no accedera un camion que estara libre, lo aprovechamos
             if(parking[i][j]==0&&parking[i][j+1]==0){
-                parking[i][j]=coche_id;
-                parking[i][j+1]=coche_id;
+                parking[i][j]=camion_id;
+                parking[i][j+1]=camion_id;
                 aparcamiento[0]=i;
                 aparcamiento[1]=j;
                 aparcamiento[2]=j+1;
                 plazacamionplanta[i]--;
                 salida=0;
-                printf("ENTRADA: Camion %i aparcado en plaza %i del piso %i. Plazas libres: %i\n",coche_id,aparcamiento[1],aparcamiento[0],plazaslibres);
+                printf("ENTRADA: Camion %i aparcado en plaza %i del piso %i. Plazas libres: %i\n",camion_id,aparcamiento[1],aparcamiento[0],plazaslibres);
+                mostrarParking();
             }
         }
     }
@@ -163,26 +179,28 @@ void *camion(void *num){
     plazaslibres=plazaslibres+2;
     plazascamiones++;
     plazacamionplanta[aparcamiento[0]]++;
-    printf("SALIDA: Camion %i saliendo. Plazas libres: %i\n",coche_id,plazaslibres);
-    for(int i=1;i<=COCHES+CAMIONES;i++){
-        pthread_cond_signal(&espera[i]);
+    printf("SALIDA: Camion %i saliendo. Plazas libres: %i\n",camion_id,plazaslibres);
+    for(int i=1;i<=cantcoches;i++){
+        pthread_cond_signal(&esperacoches[i]);
+    }
+    for(int i=1; i<=cantcamiones; i++){
+        pthread_cond_signal(&esperacamiones[i]);
     }
     //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
+    //Por ejemplo, es decir, no hay un orden de entrada.
 
     pthread_mutex_unlock(&mutex);
     //Salimos de la seccion critica
 }
 
 
+
 int main(int argc, char *argv[]) {
-
-
     int i,j; //Contadores para los bucles
     pthread_t th;
-    //Identificadores de los coches que van a entrar
-    int coches_id[COCHES+CAMIONES+1];
-
-
+    //Identificadores de los coches y camiones que van a entrar
+    int *coches_id;
+    int *camiones_id;
 
     //Cantidad de plazas y pisos del programa
     plazas=atoi(argv[2]);
@@ -194,6 +212,27 @@ int main(int argc, char *argv[]) {
     for(i=0;i<pisos;i++){
         parking[i]=(int*) malloc(plazas*sizeof (int));
     }
+
+    if(argc>=4){
+        cantcoches=atoi(argv[3]);
+    }
+    else{
+        cantcoches=2*plazas*pisos;
+    }
+    //Creamos un array de ids para los coches y uno para las condiciones del mutex de cada coche:
+    coches_id = (int*) malloc((cantcoches+cantcamiones+1)*sizeof (int));
+    esperacoches = (pthread_cond_t*) malloc((cantcoches+1)*sizeof (pthread_cond_t));
+
+
+    if(argc>=5){
+        cantcamiones=atoi(argv[4]);
+    }
+    else{
+        cantcamiones=0;
+    }
+    //Creamos el array de ids para los camiones:
+    camiones_id = (int*) malloc((cantcamiones+1)*sizeof (int));
+    esperacamiones = (pthread_cond_t*) malloc((cantcamiones+1)*sizeof (pthread_cond_t));
 
     //Seteamos los valores del parking a 0 al principio comienza vacio
     for(i=0;i<pisos;i++){
@@ -212,16 +251,16 @@ int main(int argc, char *argv[]) {
 
     pthread_mutex_init(&mutex,NULL);
 
-    //prueba con COCHES coches
-    for(int i=1;i<=COCHES;i++){
-        pthread_cond_init(&espera[i], NULL);
+    //entran cantcoches coches
+    for(int i=1;i<=cantcoches;i++){
+        pthread_cond_init(&esperacoches[i], NULL);
         coches_id[i]=i;
         pthread_create(&th,NULL,coche,(void*)&coches_id[i]);
     }
-    for(int i=COCHES+1; i<=COCHES+CAMIONES; i++){
-        pthread_cond_init(&espera[i], NULL);
-        coches_id[i]=i;
-        pthread_create(&th,NULL,camion,(void*)&coches_id[i]);
+    for(int i=1; i<=cantcamiones; i++){
+        pthread_cond_init(&esperacamiones[i], NULL);
+        camiones_id[i]=i;
+        pthread_create(&th,NULL,camion,(void*)&camiones_id[i]);
     }
 
     while (1);
