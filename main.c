@@ -134,6 +134,9 @@ void *camion(void *num){
     int aparcamiento[3];
     int camion_id= *(int *)num;
 
+    //Valor de las plazas de camión que hay en la planta antes y después de aparcar el coche o sacarlo
+    int placamion;
+
     //LOCK DEL MUTEX
     pthread_mutex_lock(&mutex);
     //printf("Quiere entrar el coche %i\n",coche_id);
@@ -177,8 +180,16 @@ void *camion(void *num){
     parking[aparcamiento[0]][aparcamiento[1]]=0;
     parking[aparcamiento[0]][aparcamiento[2]]=0;
     plazaslibres=plazaslibres+2;
-    plazascamiones++;
-    plazacamionplanta[aparcamiento[0]]++;
+
+    placamion=0;
+    for(int i=0; i<plazas-1; i++){
+        if(parking[aparcamiento[0]][i]==0&&parking[aparcamiento[0]][i+1]==0){
+            i++;
+            placamion++;
+        }
+    }
+    plazascamiones+=(placamion-plazacamionplanta[aparcamiento[0]]);
+    plazacamionplanta[aparcamiento[0]]=placamion;
     printf("SALIDA: Camion %i saliendo. Plazas libres: %i\n",camion_id,plazaslibres);
     for(int i=1;i<=cantcoches;i++){
         pthread_cond_signal(&esperacoches[i]);
