@@ -4,60 +4,67 @@
 #include <unistd.h>
 
 
-struct dato{
-    int num;
-    int coche; //1 si es coche, 0 si es camión
+struct dato {
+        int num;
+        int coche; //1 si es coche, 0 si es camión
 };
 
-struct nodo {
+struct lista { /* lista simple enlazada */
     struct dato *datos;
-    struct nodo *sig;
+    struct lista *sig;
 };
 
-struct cola { /* lista simple enlazada */
-    struct nodo *inicio;
-    struct nodo *fin;
-};
+struct lista *creanodo(void) {
+    return (struct lista *) malloc(sizeof(struct lista));
+}
 
-struct dato *creadato(int num, int coche){
-    struct dato *d;
-    d=(struct dato *)malloc(sizeof(struct dato));
-    d->num=num;
-    d->coche=coche;
-}
-struct nodo *creanodo(void) {
-    return (struct nodo *) malloc(sizeof(struct nodo));
-}
-struct cola *insertafinal(struct cola *l, struct dato *x) {
-    struct nodo *p,*q;
+struct lista *insertafinal(struct lista *l, struct dato *x) {
+    struct lista *p,*q;
     q = creanodo(); /* crea un nuevo nodo */
     q->datos = x; /* copiar los datos */
     q->sig = NULL;
     if (l == NULL) {
-        l->inicio=q;
+        return q;
     }
-    else{
-        p = l->fin;
-        p->sig = q;
-    }
-    l->fin=q;
+    /* la lista argumento no es vacía. Situarse en el último */
+    p = l;
+    while (p->sig != NULL)
+        p = p->sig;
+    p->sig = q;
     return l;
 }
-struct dato *elimina(struct cola *p) {
-    struct nodo *q;
+
+struct lista *eliminaprimer(struct lista *p) {
+    struct lista *q;
+    if (p == NULL) return p;
+    q = p->sig;
+    free(p); /* libera la memoria y hemos perdido el enlace, por eso se guarda en q */
+    p = q; /* restaurar p al nuevo valor */
+    return p;
+}
+
+struct dato *primerelemento(struct lista *p){
+    if (p == NULL) return NULL;
+    return p->datos;
+}
+
+struct dato *creadato(int num, int coche){
     struct dato *d;
-    if (p == NULL) exit(1);
-    q = p->inicio;
-    d = q->datos;
-    p->inicio = q->sig;
-    if(p->inicio->sig==NULL) {
-        p->fin=NULL;
-    }
-    else {
-        p->fin= p ->inicio ->sig;
-    }
-    free(q); //Liberamos la memoria del nodo;
+    d = (struct dato *) malloc(sizeof(struct dato));
+    d->num=num;
+    d->coche=coche;
     return d;
+}
+
+struct lista *anulalista(struct lista *l) {
+    struct lista *p,*q;
+    p = l;
+    while (p != NULL) {
+        q = p->sig; /* para no perder el nodo */
+        free(p);
+        p = q;
+    }
+    return NULL;
 }
 
 //La variable parking simulara las plazas del parking a ellas se accede de la siguiente forma:
@@ -90,7 +97,7 @@ pthread_cond_t *esperacoches;
 pthread_cond_t *esperacamiones;
 
 //cola
-struct cola *cola;
+struct lista *cola;
 
 void mostrarParking(){
     int i,j;
@@ -102,165 +109,208 @@ void mostrarParking(){
     }
 }
 
-void *coche(void *num){
-    //valor booleano util para la busqueda del aprcamiento
-    int salida=1;
+void *coche(void *num) {
+    while (1) {
 
 
-    //valor para que el coche sepa donde aparca
-    int aparcamiento[2];
-    int coche_id= *(int *)num;
-
-    //Valor de las plazas de camión que hay en la planta antes y después de aparcar el coche o sacarlo
-    int placamion;
-
-    //LOCK DEL MUTEX
-    pthread_mutex_lock(&mutex);
-    //printf("Quiere entrar el coche %i\n",coche_id);
+        //valor booleano util para la busqueda del aprcamiento
+        int salida = 1;
 
 
-    while(plazaslibres==0){
-        pthread_cond_wait(&esperacoches[coche_id], &mutex);
-    }
+        //valor para que el coche sepa donde aparca
+        int aparcamiento[2];
+        int coche_id = *(int *) num;
 
-    //Entra en seccion critica
-    //printf("coche %i en la seccion critica\n",coche_id);
-    plazaslibres--;
-    placamion=0;
-    //Busca sitio para aparcar
-    for(int i=0;i<pisos && salida;i++){
-        for(int j=0;j<plazas && salida;j++){
-            //Sabemos que hay un sitio diferente al que no accedera un camion que estara libre, lo aprovechamos
-            if(parking[i][j]==0){
-                parking[i][j]=coche_id;
-                aparcamiento[0]=i;
-                aparcamiento[1]=j;
-                //Contamos las plazas de camión en la planta después de aparcar el coche
-                for(int k=j; k<plazas-1; k++){
-                    if(parking[i][k]==0&&parking[i][k+1]==0){
-                        k++;
-                        placamion++;
+        //Valor de las plazas de camión que hay en la planta antes y después de aparcar el coche o sacarlo
+        int placamion;
+
+        //Creamos un dato para poder usarlo;
+        struct dato *d;
+        d = creadato(coche_id,1);
+
+        //LOCK DEL MUTEX
+        pthread_mutex_lock(&mutex);
+
+        //printf("Quiere entrar el coche %i\n",coche_id);
+
+
+        while (plazaslibres == 0) {
+            cola=insertafinal(cola, d);
+            pthread_cond_wait(&esperacoches[coche_id], &mutex);
+        }
+
+        //Entra en seccion critica
+        //printf("coche %i en la seccion critica\n",coche_id);
+        plazaslibres--;
+        placamion = 0;
+        //Busca sitio para aparcar
+        for (int i = 0; i < pisos && salida; i++) {
+            for (int j = 0; j < plazas && salida; j++) {
+                //Sabemos que hay un sitio diferente al que no accedera un camion que estara libre, lo aprovechamos
+                if (parking[i][j] == 0) {
+                    parking[i][j] = coche_id;
+                    aparcamiento[0] = i;
+                    aparcamiento[1] = j;
+                    //Contamos las plazas de camión en la planta después de aparcar el coche
+                    for (int k = j; k < plazas - 1; k++) {
+                        if (parking[i][k] == 0 && parking[i][k + 1] == 0) {
+                            k++;
+                            placamion++;
+                        }
                     }
+                    //La diferencia de plazas de camiones entre antes de aparcar el coche y ahora, lo quitamos de las plazas de camión.
+                    plazascamiones -= (plazacamionplanta[i] - placamion);
+                    plazacamionplanta[i] = placamion;
+                    salida = 0;
+                    printf("ENTRADA: Coche %i aparcado en plaza %i del piso %i. Plazas libres: %i. Plazas camion: %i\n",
+                           coche_id, aparcamiento[1], aparcamiento[0], plazaslibres, plazascamiones);
+                    mostrarParking();
                 }
-                //La diferencia de plazas de camiones entre antes de aparcar el coche y ahora, lo quitamos de las plazas de camión.
-                plazascamiones-=(plazacamionplanta[i]-placamion);
-                plazacamionplanta[i]=placamion;
-                salida=0;
-                printf("ENTRADA: Coche %i aparcado en plaza %i del piso %i. Plazas libres: %i. Plazas camion: %i\n",coche_id,aparcamiento[1],aparcamiento[0],plazaslibres, plazascamiones);
-                mostrarParking();
             }
         }
-    }
 
 
-    pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&mutex);
 
-    sleep( (rand() % 5) + 3);
+        sleep((rand() % 5) + 3);
 
-    //Entramos en la seccion critica
-    pthread_mutex_lock(&mutex);
-    parking[aparcamiento[0]][aparcamiento[1]]=0;
-    plazaslibres++;
-    placamion=0;
-    for(int i=0; i<plazas-1; i++){
-        if(parking[aparcamiento[0]][i]==0&&parking[aparcamiento[0]][i+1]==0){
-            i++;
-            placamion++;
+        //Entramos en la seccion critica
+        pthread_mutex_lock(&mutex);
+        parking[aparcamiento[0]][aparcamiento[1]] = 0;
+        plazaslibres++;
+        placamion = 0;
+        for (int i = 0; i < plazas - 1; i++) {
+            if (parking[aparcamiento[0]][i] == 0 && parking[aparcamiento[0]][i + 1] == 0) {
+                i++;
+                placamion++;
+            }
         }
-    }
-    plazascamiones+=(placamion-plazacamionplanta[aparcamiento[0]]);
-    plazacamionplanta[aparcamiento[0]]=placamion;
-    printf("SALIDA: Coche %i saliendo. Plazas libres: %i. Plazas camión: %i\n",coche_id,plazaslibres,plazascamiones);
-    for(int i=1;i<=cantcoches;i++){
-        pthread_cond_signal(&esperacoches[i]);
-    }
-    for(int i=1; i<=cantcamiones; i++){
-        pthread_cond_signal(&esperacamiones[i]);
-    }
+        plazascamiones += (placamion - plazacamionplanta[aparcamiento[0]]);
+        plazacamionplanta[aparcamiento[0]] = placamion;
+        printf("SALIDA: Coche %i saliendo. Plazas libres: %i. Plazas camión: %i\n", coche_id, plazaslibres,
+               plazascamiones);
+        /*
+        for (int i = 1; i <= cantcoches; i++) {
+            pthread_cond_signal(&esperacoches[i]);
+        }
+        for (int i = 1; i <= cantcamiones; i++) {
+            pthread_cond_signal(&esperacamiones[i]);
+        }*/
 
-    //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
+        //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
 
-    pthread_mutex_unlock(&mutex);
-    //Salimos de la seccion critica
+        d=primerelemento(cola);
+        cola = eliminaprimer(cola);
+        if(d!=NULL) {
+            if (d->coche == 0) {
+                pthread_cond_signal(&esperacamiones[d->num]);
+            } else {
+                pthread_cond_signal(&esperacoches[d->num]);
+            }
+        }
+        pthread_mutex_unlock(&mutex);
+        //Salimos de la seccion critica
+        sleep((rand() % 10) + 3);
+    }
 }
 
-void *camion(void *num){
-    //valor booleano util para la busqueda del aprcamiento
-    int salida=1;
+void *camion(void *num) {
+    while (1) {
+
+        //valor booleano util para la busqueda del aprcamiento
+        int salida = 1;
 
 
-    //valor para que el camión sepa donde aparca
-    int aparcamiento[3];
-    int camion_id= *(int *)num;
+        //valor para que el camión sepa donde aparca
+        int aparcamiento[3];
+        int camion_id = *(int *) num;
 
-    //Valor de las plazas de camión que hay en la planta antes y después de aparcar el coche o sacarlo
-    int placamion;
+        //Valor de las plazas de camión que hay en la planta antes y después de aparcar el coche o sacarlo
+        int placamion;
 
-    //LOCK DEL MUTEX
-    pthread_mutex_lock(&mutex);
-    //printf("Quiere entrar el coche %i\n",coche_id);
+        //Creamos un dato para poder usarlo;
+        struct dato *d;
+        d = creadato(camion_id-100,0);
+
+        //LOCK DEL MUTEX
+        pthread_mutex_lock(&mutex);
+
+        while (plazascamiones == 0) {
+            cola=insertafinal(cola, d);
+            pthread_cond_wait(&esperacamiones[camion_id - 100], &mutex);
+        }
+
+        //Entra en seccion critica
+        //printf("coche %i en la seccion critica\n",coche_id);
 
 
-    while(plazascamiones==0){
-        pthread_cond_wait(&esperacamiones[camion_id], &mutex);
-    }
-
-    //Entra en seccion critica
-    //printf("coche %i en la seccion critica\n",coche_id);
-
-
-    plazaslibres-=2;
-    plazascamiones--;
-    //Busca sitio para aparcar
-    for(int i=0;i<pisos && salida;i++){
-        for(int j=0;j<plazas-1 && salida;j++){
-            //Sabemos que hay un sitio diferente al que no accedera un camion que estara libre, lo aprovechamos
-            if(parking[i][j]==0&&parking[i][j+1]==0){
-                parking[i][j]=camion_id;
-                parking[i][j+1]=camion_id;
-                aparcamiento[0]=i;
-                aparcamiento[1]=j;
-                aparcamiento[2]=j+1;
-                plazacamionplanta[i]--;
-                salida=0;
-                printf("ENTRADA: Camion %i aparcado en plaza %i del piso %i. Plazas libres: %i\n",camion_id,aparcamiento[1],aparcamiento[0],plazaslibres);
-                mostrarParking();
+        plazaslibres -= 2;
+        plazascamiones--;
+        //Busca sitio para aparcar
+        for (int i = 0; i < pisos && salida; i++) {
+            if (plazacamionplanta[i]>0) {
+                for (int j = 0; j < plazas - 1 && salida; j++) {
+                    //Sabemos que hay un sitio diferente al que no accedera un camion que estara libre, lo aprovechamos
+                    if (parking[i][j] == 0 && parking[i][j + 1] == 0) {
+                        parking[i][j] = camion_id;
+                        parking[i][j + 1] = camion_id;
+                        aparcamiento[0] = i;
+                        aparcamiento[1] = j;
+                        aparcamiento[2] = j + 1;
+                        plazacamionplanta[i]--;
+                        salida = 0;
+                        printf("ENTRADA: Camion %i aparcado en plaza %i del piso %i. Plazas libres: %i\n", camion_id,
+                               aparcamiento[1], aparcamiento[0], plazaslibres);
+                        mostrarParking();
+                    }
+                }
             }
         }
-    }
 
 
-    pthread_mutex_unlock(&mutex);
+        pthread_mutex_unlock(&mutex);
 
-    sleep( (rand() % 5) + 3);
+        sleep((rand() % 10) + 3);
 
-    //Entramos en la seccion critica
-    pthread_mutex_lock(&mutex);
-    parking[aparcamiento[0]][aparcamiento[1]]=0;
-    parking[aparcamiento[0]][aparcamiento[2]]=0;
-    plazaslibres=plazaslibres+2;
+        //Entramos en la seccion critica
+        pthread_mutex_lock(&mutex);
+        parking[aparcamiento[0]][aparcamiento[1]] = 0;
+        parking[aparcamiento[0]][aparcamiento[2]] = 0;
+        plazaslibres = plazaslibres + 2;
 
-    placamion=0;
-    for(int i=0; i<plazas-1; i++){
-        if(parking[aparcamiento[0]][i]==0&&parking[aparcamiento[0]][i+1]==0){
-            i++;
-            placamion++;
+        placamion = 0;
+        for (int i = 0; i < plazas - 1; i++) {
+            if (parking[aparcamiento[0]][i] == 0 && parking[aparcamiento[0]][i + 1] == 0) {
+                i++;
+                placamion++;
+            }
         }
+        plazascamiones += (placamion - plazacamionplanta[aparcamiento[0]]);
+        plazacamionplanta[aparcamiento[0]] = placamion;
+        printf("SALIDA: Camion %i saliendo. Plazas libres: %i\n", camion_id, plazaslibres);
+        /*
+        for (int i = 1; i <= cantcoches; i++) {
+            pthread_cond_signal(&esperacoches[i]);
+        }
+        for (int i = 1; i <= cantcamiones; i++) {
+            pthread_cond_signal(&esperacamiones[i]);
+        }
+         */
+        //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
+        //Por ejemplo, es decir, no hay un orden de entrada.
+        d=primerelemento(cola);
+        cola = eliminaprimer(cola);
+        if(d!=NULL) {
+            if (d->coche == 0) {
+                pthread_cond_signal(&esperacamiones[d->num]);
+            } else {
+                pthread_cond_signal(&esperacoches[d->num]);
+            }
+        }
+        pthread_mutex_unlock(&mutex);
+        //Salimos de la seccion critica
+        sleep((rand() % 10) + 3);
     }
-    plazascamiones+=(placamion-plazacamionplanta[aparcamiento[0]]);
-    plazacamionplanta[aparcamiento[0]]=placamion;
-    printf("SALIDA: Camion %i saliendo. Plazas libres: %i\n",camion_id,plazaslibres);
-    for(int i=1;i<=cantcoches;i++){
-        pthread_cond_signal(&esperacoches[i]);
-    }
-    for(int i=1; i<=cantcamiones; i++){
-        pthread_cond_signal(&esperacamiones[i]);
-    }
-    //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
-    //Por ejemplo, es decir, no hay un orden de entrada.
-
-    pthread_mutex_unlock(&mutex);
-    //Salimos de la seccion critica
 }
 
 
@@ -330,11 +380,12 @@ int main(int argc, char *argv[]) {
     }
     for(int i=1; i<=cantcamiones; i++){
         pthread_cond_init(&esperacamiones[i], NULL);
-        camiones_id[i]=i;
+        camiones_id[i]=i+100;
         pthread_create(&th,NULL,camion,(void*)&camiones_id[i]);
     }
 
     while (1);
+    cola=anulalista(cola);
     return 0;
 
 }
