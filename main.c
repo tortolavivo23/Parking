@@ -4,6 +4,62 @@
 #include <unistd.h>
 
 
+struct dato{
+    int num;
+    int coche; //1 si es coche, 0 si es camión
+};
+
+struct nodo {
+    struct dato *datos;
+    struct nodo *sig;
+};
+
+struct cola { /* lista simple enlazada */
+    struct nodo *inicio;
+    struct nodo *fin;
+};
+
+struct dato *creadato(int num, int coche){
+    struct dato *d;
+    d=(struct dato *)malloc(sizeof(struct dato));
+    d->num=num;
+    d->coche=coche;
+}
+struct nodo *creanodo(void) {
+    return (struct nodo *) malloc(sizeof(struct nodo));
+}
+struct cola *insertafinal(struct cola *l, struct dato *x) {
+    struct nodo *p,*q;
+    q = creanodo(); /* crea un nuevo nodo */
+    q->datos = x; /* copiar los datos */
+    q->sig = NULL;
+    if (l == NULL) {
+        l->inicio=q;
+    }
+    else{
+        p = l->fin;
+        p->sig = q;
+    }
+    l->fin=q;
+    return l;
+}
+struct dato *elimina(struct cola *p) {
+    struct nodo *q;
+    struct dato *d;
+    if (p == NULL) exit(1);
+    q = p->inicio;
+    d = q->datos;
+    p->inicio = q->sig;
+    if(p->inicio->sig==NULL) {
+        p->fin=NULL;
+    }
+    else {
+        p->fin= p ->inicio ->sig;
+    }
+    free(q); //Liberamos la memoria del nodo;
+    return d;
+}
+
 //La variable parking simulara las plazas del parking a ellas se accede de la siguiente forma:
 //planta 2 aparcamiento 4 seria parking[2-1][4-1];
 int **parking;
@@ -32,6 +88,9 @@ pthread_mutex_t mutex;
 //COndicion del mutex
 pthread_cond_t *esperacoches;
 pthread_cond_t *esperacamiones;
+
+//cola
+struct cola *cola;
 
 void mostrarParking(){
     int i,j;
@@ -212,6 +271,7 @@ int main(int argc, char *argv[]) {
     //Identificadores de los coches y camiones que van a entrar
     int *coches_id;
     int *camiones_id;
+    cola = NULL; //Inicialización
 
     //Cantidad de plazas y pisos del programa
     plazas=atoi(argv[2]);
