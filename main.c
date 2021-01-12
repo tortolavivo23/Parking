@@ -67,6 +67,21 @@ struct lista *anulalista(struct lista *l) {
     return NULL;
 }
 
+int equals(struct dato *dato1, struct dato *dato2){
+    if(dato1==NULL){
+        if(dato2==NULL){
+            return 1;
+        }
+        return 0;
+    }
+    if((dato1->num==dato2->num)&&(dato1->coche==dato2->coche)){
+        return 1;
+    }
+    else{
+        return 0;
+    }
+}
+
 //La variable parking simulara las plazas del parking a ellas se accede de la siguiente forma:
 //planta 2 aparcamiento 4 seria parking[2-1][4-1];
 int **parking;
@@ -126,19 +141,20 @@ void *coche(void *num) {
 
         //Creamos un dato para poder usarlo;
         struct dato *d;
-        d = creadato(coche_id,1);
+
 
         //LOCK DEL MUTEX
         pthread_mutex_lock(&mutex);
 
-        //printf("Quiere entrar el coche %i\n",coche_id);
+        printf("Quiere entrar el coche %i\n",coche_id);
+        d = creadato(coche_id,1);
+        cola = insertafinal(cola, d);
 
-
-        while (plazaslibres == 0) {
-            cola=insertafinal(cola, d);
+        //Si no hay plazas o no es el primer elemento de la cola, debe esperar la señal para continuar.
+        while (plazaslibres==0||equals(d,primerelemento(cola))==0) {
             pthread_cond_wait(&esperacoches[coche_id], &mutex);
         }
-
+        cola = eliminaprimer(cola);
         //Entra en seccion critica
         //printf("coche %i en la seccion critica\n",coche_id);
         plazaslibres--;
@@ -166,6 +182,16 @@ void *coche(void *num) {
                            coche_id, aparcamiento[1], aparcamiento[0], plazaslibres, plazascamiones);
                     mostrarParking();
                 }
+            }
+        }
+
+        //Enviamos señal al primer elemento de la cola
+        d = primerelemento(cola);
+        if (d != NULL) {
+            if (d->coche == 0) {
+                pthread_cond_signal(&esperacamiones[d->num]);
+            } else if (d->coche == 1) {
+                pthread_cond_signal(&esperacoches[d->num]);
             }
         }
 
@@ -199,15 +225,16 @@ void *coche(void *num) {
 
         //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
 
-        d=primerelemento(cola);
-        cola = eliminaprimer(cola);
-        if(d!=NULL) {
+        //Enviamos señal al primer elemento de la cola
+        d = primerelemento(cola);
+        if (d != NULL) {
             if (d->coche == 0) {
                 pthread_cond_signal(&esperacamiones[d->num]);
-            } else {
+            } else{
                 pthread_cond_signal(&esperacoches[d->num]);
             }
         }
+
         pthread_mutex_unlock(&mutex);
         //Salimos de la seccion critica
         sleep((rand() % 10) + 3);
@@ -230,16 +257,18 @@ void *camion(void *num) {
 
         //Creamos un dato para poder usarlo;
         struct dato *d;
-        d = creadato(camion_id-100,0);
+
 
         //LOCK DEL MUTEX
         pthread_mutex_lock(&mutex);
-
-        while (plazascamiones == 0) {
-            cola=insertafinal(cola, d);
+        printf("Quiere entrar el camion %i\n",camion_id);
+        d = creadato(camion_id-100,0);
+        cola=insertafinal(cola, d);
+        //Si no hay plazas o no es el primer elemento de la cola, debe esperar la señal para continuar.
+        while (plazascamiones==0||equals(d,primerelemento(cola)) == 0) {
             pthread_cond_wait(&esperacamiones[camion_id - 100], &mutex);
         }
-
+        cola=eliminaprimer(cola);
         //Entra en seccion critica
         //printf("coche %i en la seccion critica\n",coche_id);
 
@@ -264,6 +293,16 @@ void *camion(void *num) {
                         mostrarParking();
                     }
                 }
+            }
+        }
+
+        //Enviamos una señal al primer elemento de la cola
+        d = primerelemento(cola);
+        if (d != NULL) {
+            if (d->coche == 0) {
+                pthread_cond_signal(&esperacamiones[d->num]);
+            } else  {
+                pthread_cond_signal(&esperacoches[d->num]);
             }
         }
 
@@ -295,15 +334,16 @@ void *camion(void *num) {
         for (int i = 1; i <= cantcamiones; i++) {
             pthread_cond_signal(&esperacamiones[i]);
         }
-         */
+
         //Esta implementacion funciona, problema, el coche 3 que se supone que entra rapido, puede ser de los ultimos en entrar.
-        //Por ejemplo, es decir, no hay un orden de entrada.
-        d=primerelemento(cola);
-        cola = eliminaprimer(cola);
-        if(d!=NULL) {
+        //Por ejemplo, es decir, no hay un orden de entrada.*/
+
+        //Enviamos una señal al primer elemento de la cola
+        d = primerelemento(cola);
+        if (d != NULL) {
             if (d->coche == 0) {
                 pthread_cond_signal(&esperacamiones[d->num]);
-            } else {
+            } else if (d->coche == 1) {
                 pthread_cond_signal(&esperacoches[d->num]);
             }
         }
