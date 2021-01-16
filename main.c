@@ -387,10 +387,15 @@ int main(int argc, char *argv[]) {
 
     if(argc>=5){
         cantcamiones=atoi(argv[4]);
+        if(plazas<2){
+            printf("Como por la disposición del parking no van a poder entrar camiones, se va a reducir su número a 0.\n");
+            cantcamiones=0;
+        }
     }
     else{
         cantcamiones=0;
     }
+
     //Creamos el array de ids para los camiones:
     camiones_id = (int*) malloc((cantcamiones+1)*sizeof (int));
     esperacamiones = (pthread_cond_t*) malloc((cantcamiones+1)*sizeof (pthread_cond_t));
