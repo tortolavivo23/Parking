@@ -146,7 +146,7 @@ void *coche(void *num) {
         //LOCK DEL MUTEX
         pthread_mutex_lock(&mutex);
 
-        printf("Quiere entrar el coche %i\n",coche_id);
+        //printf("Quiere entrar el coche %i\n",coche_id);
         d = creadato(coche_id,1);
         cola = insertafinal(cola, d);
 
@@ -261,7 +261,7 @@ void *camion(void *num) {
 
         //LOCK DEL MUTEX
         pthread_mutex_lock(&mutex);
-        printf("Quiere entrar el camion %i\n",camion_id);
+        //printf("Quiere entrar el camion %i\n",camion_id);
         d = creadato(camion_id-100,0);
         cola=insertafinal(cola, d);
         //Si no hay plazas o no es el primer elemento de la cola, debe esperar la señal para continuar.
@@ -288,8 +288,8 @@ void *camion(void *num) {
                         aparcamiento[2] = j + 1;
                         plazacamionplanta[i]--;
                         salida = 0;
-                        printf("ENTRADA: Camion %i aparcado en plaza %i del piso %i. Plazas libres: %i\n", camion_id,
-                               aparcamiento[1], aparcamiento[0], plazaslibres);
+                        printf("ENTRADA: Camion %i aparcado en plaza %i del piso %i. Plazas libres: %i Plazas camión: %i\n", camion_id,
+                               aparcamiento[1], aparcamiento[0], plazaslibres,plazascamiones);
                         mostrarParking();
                     }
                 }
@@ -326,7 +326,7 @@ void *camion(void *num) {
         }
         plazascamiones += (placamion - plazacamionplanta[aparcamiento[0]]);
         plazacamionplanta[aparcamiento[0]] = placamion;
-        printf("SALIDA: Camion %i saliendo. Plazas libres: %i\n", camion_id, plazaslibres);
+        printf("SALIDA: Camion %i saliendo. Plazas libres: %i. Plazas camión: %i\n", camion_id, plazaslibres,plazascamiones);
         /*
         for (int i = 1; i <= cantcoches; i++) {
             pthread_cond_signal(&esperacoches[i]);
